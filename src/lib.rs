@@ -1,21 +1,20 @@
 use std::{
     cmp::{max, min},
-    fs,
     io::{Error, Write},
     path,
 };
 
 #[derive(Eq, PartialEq, Debug)]
-struct Cursor {
-    row: usize,
-    column: usize,
+pub struct Cursor {
+    pub row: usize,
+    pub column: usize,
 }
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct Viteditor {
-    buf: Vec<Vec<char>>,
-    cursor: Cursor,
-    row_offset: usize,
+    pub buf: Vec<Vec<char>>,
+    pub cursor: Cursor,
+    pub row_offset: usize,
 }
 
 pub enum KeyEvent {
@@ -38,15 +37,7 @@ pub trait Editor {
     fn goto<T: Write>(out: &mut T, pos: Position) -> Result<(), Error>;
     fn write_str<T: Write>(out: &mut T, str: &str) -> Result<(), Error>;
 
-    fn open(path: &path::Path, editor: &mut Viteditor) {
-        editor.buf = fs::read_to_string(path)
-            .ok()
-            .map(|s| s.lines().map(|line| line.chars().collect()).collect())
-            .unwrap();
-
-        editor.cursor = Cursor { row: 0, column: 0 };
-        editor.row_offset = 0;
-    }
+    fn open(path: &path::Path, editor: &mut Viteditor);
     fn scroll(editor: &mut Viteditor) {
         let (rows, _) = Self::terminal_size();
         editor.row_offset = min(editor.row_offset, editor.cursor.row);
