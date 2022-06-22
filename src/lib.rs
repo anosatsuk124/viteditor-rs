@@ -1,17 +1,8 @@
 use std::{
     cmp::{max, min},
     fs,
-    io::Write,
+    io::{Error, Write},
     path,
-};
-
-use termion::{clear, cursor};
-
-use std::io::Stdin;
-
-use termion::{
-    event::{Event, Key},
-    input::TermRead,
 };
 
 #[derive(Eq, PartialEq, Debug)]
@@ -21,57 +12,109 @@ struct Cursor {
 }
 
 #[derive(Eq, PartialEq, Debug)]
-pub struct Editor {
+pub struct Viteditor {
     buf: Vec<Vec<char>>,
     cursor: Cursor,
     row_offset: usize,
 }
 
-impl Default for Editor {
-    fn default() -> Self {
-        Self {
-            buf: vec![Vec::new()],
-            cursor: Cursor { row: 0, column: 0 },
-            row_offset: 0,
-        }
-    }
+pub enum KeyEvent {
+    Ctrl(char),
+    Up,
+    Down,
+    Left,
+    Right,
 }
 
-impl Editor {
-    pub fn open(&mut self, path: &path::Path) {
-        self.buf = fs::read_to_string(path)
+pub struct Position(pub u16, pub u16);
+
+pub trait EditorReader {
+    fn event_loop<T: Write>(self, out:&mut T, editor: &mut Viteditor);
+}
+
+pub trait Editor {
+    fn terminal_size() -> (usize, usize);
+    fn clear_all<T: Write>(out: &mut T) -> Result<(), Error>;
+    fn goto<T: Write>(out: &mut T, pos: Position) -> Result<(), Error>;
+    fn write_str<T: Write>(out: &mut T, str: &str) -> Result<(), Error>;
+
+    fn open(path: &path::Path, editor: &mut Viteditor) {
+        editor.buf = fs::read_to_string(path)
             .ok()
             .map(|s| s.lines().map(|line| line.chars().collect()).collect())
             .unwrap();
 
-        self.cursor = Cursor { row: 0, column: 0 };
-        self.row_offset = 0;
+        editor.cursor = Cursor { row: 0, column: 0 };
+        editor.row_offset = 0;
     }
-
-    fn terminal_size() -> (usize, usize) {
-        let (cols, rows) = termion::terminal_size().unwrap();
-        (rows as usize, cols as usize)
+    fn scroll(editor: &mut Viteditor) {
+        let (rows, _) = Self::terminal_size();
+        editor.row_offset = min(editor.row_offset, editor.cursor.row);
+        if editor.cursor.row + 1 >= rows {
+            editor.row_offset = max(editor.row_offset, editor.cursor.row + 1 - rows);
+        }
     }
-
-    pub fn draw<T: Write>(&self, out: &mut T) {
+    fn cursor_right(editor: &mut Viteditor) {
+        editor.cursor.column = min(
+            editor.cursor.column + 1,
+            editor.buf[editor.cursor.row].len(),
+        );
+    }
+    fn cursor_left(editor: &mut Viteditor) {
+        if editor.cursor.column > 0 {
+            editor.cursor.column -= 1;
+        }
+    }
+    fn cursor_up(editor: &mut Viteditor) {
+        if editor.cursor.row > 0 {
+            editor.cursor.row -= 1;
+            editor.cursor.column = min(editor.buf[editor.cursor.row].len(), editor.cursor.column);
+        }
+        Self::scroll(editor);
+    }
+    fn cursor_down(editor: &mut Viteditor) {
+        if editor.cursor.row + 1 < editor.buf.len() {
+            editor.cursor.row += 1;
+            editor.cursor.column = min(editor.cursor.column, editor.buf[editor.cursor.row].len());
+        }
+        Self::scroll(editor);
+    }
+    fn event(event: Option<KeyEvent>, editor: &mut Viteditor) {
+            match event {
+                Some(KeyEvent::Up) => {
+                    Self::cursor_up(editor);
+                }
+                Some(KeyEvent::Down) => {
+                    Self::cursor_down(editor);
+                }
+                Some(KeyEvent::Left) => {
+                    Self::cursor_left(editor);
+                }
+                Some(KeyEvent::Right) => {
+                    Self::cursor_right(editor);
+                }
+                _ => {}
+            }
+    }
+    fn draw<T: Write>(out: &mut T, editor: &mut Viteditor) {
         let (rows, cols) = Self::terminal_size();
 
-        write!(out, "{}", clear::All).unwrap();
-        write!(out, "{}", cursor::Goto(1, 1)).unwrap();
+        Self::clear_all(out).unwrap();
+        Self::goto(out, Position(1, 1)).unwrap();
 
         let mut row = 0;
         let mut col = 0;
 
         let mut display_cursor: Option<(usize, usize)> = None;
 
-        'outer: for i in self.row_offset..self.buf.len() {
-            for j in 0..=self.buf[i].len() {
-                if self.cursor == (Cursor { row: i, column: j }) {
+        'outer: for i in editor.row_offset..editor.buf.len() {
+            for j in 0..=editor.buf[i].len() {
+                if editor.cursor == (Cursor { row: i, column: j }) {
                     display_cursor = Some((row, col));
                 }
 
-                if let Some(c) = self.buf[i].get(j) {
-                    write!(out, "{}", c).unwrap();
+                if let Some(c) = editor.buf[i].get(j) {
+                    Self::write_str(out, c.to_string().as_str()).unwrap();
                     col += 1;
                     if col >= cols {
                         row += 1;
@@ -79,7 +122,7 @@ impl Editor {
                         if row >= rows {
                             break 'outer;
                         } else {
-                            write!(out, "\r\n").unwrap();
+                            Self::write_str(out, "\r\n").unwrap();
                         }
                     }
                 }
@@ -89,67 +132,24 @@ impl Editor {
             if row >= rows {
                 break;
             } else {
-                write!(out, "\r\n").unwrap();
+                Self::write_str(out, "\r\n").unwrap();
             }
         }
 
         if let Some((r, c)) = display_cursor {
-            write!(out, "{}", cursor::Goto(c as u16 + 1, r as u16 + 1)).unwrap();
+            Self::goto(out, Position(c as u16 + 1, r as u16 + 1)).unwrap();
         }
 
         out.flush().unwrap();
     }
-    pub fn scroll(&mut self) {
-        let (rows, _) = Self::terminal_size();
-        self.row_offset = min(self.row_offset, self.cursor.row);
-        if self.cursor.row + 1 >= rows {
-            self.row_offset = max(self.row_offset, self.cursor.row + 1 - rows);
-        }
-    }
-    pub fn cursor_up(&mut self) {
-        if self.cursor.row > 0 {
-            self.cursor.row -= 1;
-            self.cursor.column = min(self.buf[self.cursor.row].len(), self.cursor.column);
-        }
-        self.scroll();
-    }
-    pub fn cursor_down(&mut self) {
-        if self.cursor.row + 1 < self.buf.len() {
-            self.cursor.row += 1;
-            self.cursor.column = min(self.cursor.column, self.buf[self.cursor.row].len());
-        }
-        self.scroll();
-    }
-    pub fn cursor_left(&mut self) {
-        if self.cursor.column > 0 {
-            self.cursor.column -= 1;
-        }
-    }
-    pub fn cursor_right(&mut self) {
-        self.cursor.column = min(self.cursor.column + 1, self.buf[self.cursor.row].len());
-    }
+}
 
-    pub fn event_loop<T: Write>(&mut self, stdin: Stdin, stdout: &mut T) {
-        for event in stdin.events() {
-            match event.unwrap() {
-                Event::Key(Key::Ctrl('c')) => {
-                    return;
-                }
-                Event::Key(Key::Up) => {
-                    self.cursor_up();
-                }
-                Event::Key(Key::Down) => {
-                    self.cursor_down();
-                }
-                Event::Key(Key::Left) => {
-                    self.cursor_left();
-                }
-                Event::Key(Key::Right) => {
-                    self.cursor_right();
-                }
-                _ => {}
-            }
-            self.draw(stdout);
+impl Default for Viteditor {
+    fn default() -> Self {
+        Self {
+            buf: vec![Vec::new()],
+            cursor: Cursor { row: 0, column: 0 },
+            row_offset: 0,
         }
     }
 }
