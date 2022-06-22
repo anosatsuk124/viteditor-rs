@@ -8,6 +8,6 @@ edition = "2021"
 [workspace]
 members = [
     "tui",
-    "web",
+    "web/web-ui",
 ]
 
