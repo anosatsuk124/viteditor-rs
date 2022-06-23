@@ -49,15 +49,6 @@ TuiEditor::draw(out, editor);
 struct TuiEditor(Viteditor);
 
 impl Editor for TuiEditor {
-    fn open(path: &path::Path, editor: &mut Viteditor) {
-        editor.buf = std::fs::read_to_string(path)
-            .ok()
-            .map(|s| s.lines().map(|line| line.chars().collect()).collect())
-            .unwrap();
-
-        editor.cursor = Cursor { row: 0, column: 0 };
-        editor.row_offset = 0;
-    }
     fn terminal_size() -> (usize, usize) {
         let (cols, rows) = termion::terminal_size().unwrap();
         (rows as usize, cols as usize)
@@ -73,6 +64,18 @@ impl Editor for TuiEditor {
 
     fn write_str<T: std::io::Write>(out: &mut T, str: &str) -> Result<(), std::io::Error> {
         write!(out, "{}", str)
+    }
+}
+
+impl TuiEditor {
+    fn open(path: &path::Path, editor: &mut Viteditor) {
+        editor.buf = std::fs::read_to_string(path)
+            .ok()
+            .map(|s| s.lines().map(|line| line.chars().collect()).collect())
+            .unwrap();
+
+        editor.cursor = Cursor { row: 0, column: 0 };
+        editor.row_offset = 0;
     }
 }
 

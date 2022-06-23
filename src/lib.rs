@@ -36,8 +36,6 @@ pub trait Editor {
     fn clear_all<T: Write>(out: &mut T) -> Result<(), Error>;
     fn goto<T: Write>(out: &mut T, pos: Position) -> Result<(), Error>;
     fn write_str<T: Write>(out: &mut T, str: &str) -> Result<(), Error>;
-
-    fn open(path: &path::Path, editor: &mut Viteditor);
     fn scroll(editor: &mut Viteditor) {
         let (rows, _) = Self::terminal_size();
         editor.row_offset = min(editor.row_offset, editor.cursor.row);
