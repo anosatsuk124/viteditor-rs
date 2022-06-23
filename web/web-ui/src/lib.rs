@@ -1,8 +1,10 @@
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsValue;
 use std::{f64, io::Write};
 use wasm_bindgen::JsCast;
 use viteditor_rs::{Editor, Viteditor, Position};
-use web_sys::{CanvasRenderingContext2d, ConsoleEvent, Event, Blob, FileReaderSync};
+use web_sys::{console, CanvasRenderingContext2d, ConsoleEvent, Event, Blob, FileReaderSync};
+use js_sys::Reflect;
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
@@ -24,16 +26,13 @@ impl Editor for WebEditor {
        Ok(())
    }
 
-   fn open(path: &std::path::Path, editor: &mut Viteditor) {
-       let obj = web_sys::window().unwrap().window().document().unwrap().get_element_by_id("file").unwrap();
+   fn clear_all<T: Write>(out: &mut T) -> Result<(), std::io::Error> {
+       Ok(())
+   }
 
-       let closure = Closure::wrap(Box::new(move |event: Event| {
-           let file =event.target().unwrap().dyn_ref::<Blob>().unwrap();
-           let reader = FileReaderSync::new();
-           reader.read_as_text(file);
-       }) as Box<dyn FnMut(Event)>);
-
-       obj.add_event_listener_with_callback("change", closure.as_ref().unchecked_ref());
+   fn write_str<T: Write>(out: &mut T, str: &str) -> Result<(), std::io::Error> {
+       out.write(str.as_bytes()).unwrap();
+       out.flush()
    }
 }
 
@@ -41,7 +40,8 @@ struct Ctx(CanvasRenderingContext2d);
 
 impl Write for Ctx {
    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-       for (i, c) in buf.into_iter().enumerate() {
+       let str = String::from_utf8(buf.to_vec()).unwrap();
+       for (i, c) in str.chars().enumerate() {
            self.0.fill_text(c.to_string().as_str(), (i * 10) as f64, 10.0).unwrap();
        }
        Ok(buf.len())
@@ -53,11 +53,19 @@ impl Write for Ctx {
 
 #[wasm_bindgen(start)]
 pub fn main_js() -> Result<(), JsValue> {
-    start();
     Ok(())
 }
 
-pub fn start() {
+#[wasm_bindgen]
+pub fn open(str: &str) {
+    start(str);
+}
+
+pub fn start(str: &str) {
+    let state = WebEditor(Viteditor::default());
+
+    console::log_1(&JsValue::from_str(str));
+
     let document = web_sys::window().unwrap().document().unwrap();
     let canvas = document.get_element_by_id("canvas").unwrap();
     let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>().map_err(|_| ()).unwrap();
