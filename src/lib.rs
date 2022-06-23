@@ -1,7 +1,6 @@
 use std::{
     cmp::{max, min},
     io::{Error, Write},
-    path,
 };
 
 #[derive(Eq, PartialEq, Debug)]
