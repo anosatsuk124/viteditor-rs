@@ -42,7 +42,7 @@ impl Write for Ctx {
    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
        let str = String::from_utf8(buf.to_vec()).unwrap();
        for (i, c) in str.chars().enumerate() {
-           self.0.fill_text(c.to_string().as_str(), (i * 10) as f64, 10.0).unwrap();
+           self.0.fill_text(c.to_string().as_str(), (i * 10) as f64, 25.0).unwrap();
        }
        Ok(buf.len())
    }
@@ -62,20 +62,24 @@ pub fn open(str: &str) {
 }
 
 pub fn start(str: &str) {
-    let state = WebEditor(Viteditor::default());
+    let mut state = Viteditor::default();
 
-    console::log_1(&JsValue::from_str(str));
+    state.buf = str.lines().map(|line| line.chars().collect()).collect();
 
     let document = web_sys::window().unwrap().document().unwrap();
     let canvas = document.get_element_by_id("canvas").unwrap();
     let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>().map_err(|_| ()).unwrap();
 
-    let context = canvas.get_context("2d").unwrap().unwrap().dyn_into::<web_sys::CanvasRenderingContext2d>().unwrap();
+    let mut context = Ctx(canvas.get_context("2d").unwrap().unwrap().dyn_into::<web_sys::CanvasRenderingContext2d>().unwrap());
 
     // Set canvas size to window size
     canvas.set_width(document.document_element().unwrap().client_width() as u32 - 10);
     canvas.set_height(document.document_element().unwrap().client_height() as u32 - 10);
+    context.0.set_font("24px");
+    context.0.set_text_baseline("top");
+    context.0.set_text_align("left");
 
-    context.fill_text("H", 10.0, 10.0).unwrap();
+    WebEditor::draw(&mut context, &mut state);
+
 }
 
