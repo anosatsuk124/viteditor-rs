@@ -157,7 +157,7 @@ pub trait Editor {
 
         Self::clear_all(out).unwrap();
         // FIXME: Should be 0-indexed
-        Self::goto(out, Position { row: 1, column: 1 }).unwrap();
+        Self::goto(out, Position { row: 0, column: 0 }).unwrap();
 
         let mut pos = Position::default();
 
@@ -202,7 +202,7 @@ pub trait Editor {
         }
 
         if let Some(p) = display_cursor {
-            Self::goto(out, Position{ row: p.row + 1 as usize, column: p.column + 1 as usize}).unwrap();
+            Self::goto(out, Position{ row: p.row, column: p.column}).unwrap();
         }
 
         out.flush().unwrap();

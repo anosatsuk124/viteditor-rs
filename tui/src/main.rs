@@ -54,7 +54,7 @@ impl Editor for TuiEditor {
     }
 
     fn goto<T: std::io::Write>(out: &mut T, pos: Position) -> std::io::Result<()> {
-        write!(out, "{}", cursor::Goto(pos.column as u16, pos.row as u16))
+        write!(out, "{}", cursor::Goto(pos.column as u16 + 1, pos.row as u16 + 1))
     }
 
     fn clear_all<T: std::io::Write>(out: &mut T) -> Result<(), std::io::Error> {
