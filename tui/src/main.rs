@@ -5,43 +5,42 @@ use std::{
     path,
 };
 
-use termion::{cursor, clear, event::{Event, Key}, input::TermRead, raw::IntoRawMode, screen::AlternateScreen};
+use termion::{
+    clear, cursor,
+    event::{Event, Key},
+    input::TermRead,
+    raw::IntoRawMode,
+    screen::{AlternateScreen, ToMainScreen},
+};
 
-use viteditor_rs::{Editor, EditorReader, KeyEvent, Viteditor, Position, Cursor};
+use viteditor_rs::{words_parser::parser, Editor, State, EditorReader, KeyEvent, Position, Viteditor};
 
-struct Input (Stdin);
+struct Input(Stdin);
 
 impl Input {
-   fn stdin() -> Self {
-       Self(stdin())
-   } 
+    fn stdin() -> Self {
+        Self(stdin())
+    }
 }
 
 impl EditorReader for Input {
     fn event_loop<T: Write>(self, out: &mut T, editor: &mut Viteditor) {
         for event in self.0.events() {
-        match event.unwrap() {
-            Event::Key(Key::Ctrl(c)) => {
-                return ;
-            },
-            Event::Key(Key::Up) => {
-TuiEditor::event( Some(KeyEvent::Up), editor);
-                TuiEditor::draw(out, editor);
-            },
-            Event::Key(Key::Down) =>{
-TuiEditor::event( Some(KeyEvent::Down), editor);
-                TuiEditor::draw(out, editor);
-            } ,
-            Event::Key(Key::Left) =>{
-TuiEditor::event(Some(KeyEvent::Left), editor);
-                TuiEditor::draw(out, editor);
-            } ,
-            Event::Key(Key::Right) => {
-TuiEditor::event(Some(KeyEvent::Right), editor);
-TuiEditor::draw(out, editor);
-            },
-            _ => {},
-        }
+            match event.unwrap() {
+                Event::Key(Key::Ctrl('c')) | Event::Key(Key::Char('q')) if editor.state == State::Normal => {
+                    TuiEditor::event(Some(KeyEvent::Exit), editor);
+                    return;
+                } // defines exit keys
+                Event::Key(Key::Up) => TuiEditor::event(Some(KeyEvent::Up), editor),
+                Event::Key(Key::Down) => TuiEditor::event(Some(KeyEvent::Down), editor),
+                Event::Key(Key::Left) => TuiEditor::event(Some(KeyEvent::Left), editor),
+                Event::Key(Key::Right) => TuiEditor::event(Some(KeyEvent::Right), editor),
+                Event::Key(Key::Esc) => TuiEditor::event(Some(KeyEvent::Esc), editor),
+                Event::Key(Key::Ctrl(c)) => TuiEditor::event(Some(KeyEvent::Ctrl(c)), editor),
+                Event::Key(Key::Char(c)) => TuiEditor::event(Some(KeyEvent::Char(c)), editor),
+                _ => {},
+            };
+            TuiEditor::draw(out, editor);
         }
     }
 }
@@ -55,7 +54,7 @@ impl Editor for TuiEditor {
     }
 
     fn goto<T: std::io::Write>(out: &mut T, pos: Position) -> std::io::Result<()> {
-        write!(out, "{}", cursor::Goto(pos.0, pos.1))
+        write!(out, "{}", cursor::Goto(pos.column as u16, pos.row as u16))
     }
 
     fn clear_all<T: std::io::Write>(out: &mut T) -> Result<(), std::io::Error> {
@@ -68,19 +67,18 @@ impl Editor for TuiEditor {
 }
 
 impl TuiEditor {
+    fn new() -> Viteditor {
+        Viteditor::default()
+    }
     fn open(path: &path::Path, editor: &mut Viteditor) {
-        editor.buf = std::fs::read_to_string(path)
-            .ok()
-            .map(|s| s.lines().map(|line| line.chars().collect()).collect())
-            .unwrap();
-
-        editor.cursor = Cursor { row: 0, column: 0 };
-        editor.row_offset = 0;
+        let str = std::fs::read_to_string(path).ok();
+        editor.words.words_len = parser(&str.clone().unwrap());
+        editor.buf = str.map(|s| s.lines().map(|line| line.chars().collect()).collect()).unwrap();
     }
 }
 
 fn main() {
-    let mut state = Viteditor::default();
+    let mut state = TuiEditor::new();
 
     let stdin = Input::stdin();
     let mut stdout = AlternateScreen::from(stdout().into_raw_mode().unwrap());
