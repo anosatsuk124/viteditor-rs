@@ -101,6 +101,7 @@ pub trait Editor {
     // accessor!((get = get_buf): Vec<Vec<char>>);
     fn get_buf_len(&self) -> usize;
     fn get_buf_get(&self, index: usize) -> Vec<char>;
+    fn set_buf_line(&mut self, line: Vec<char>, index: usize);
     accessor!((get = get_row_offset, set = set_row_offset): usize);
     // accessor!((get = get_wordss, set = set_wordss): Words);
     accessor!((get = get_state, set = set_state): State);
@@ -160,8 +161,11 @@ pub trait Editor {
         self.scroll();
     }
     fn insert(&mut self, char: char) {
-        self.get_buf_get(self.get_cursor_pos_row())
-            .insert(self.get_cursor_pos_column(), char);
+        let mut buf = self.get_buf_get(self.get_cursor_pos_row());
+        buf.insert(self.get_cursor_pos_column(), char);
+        self.set_buf_line(buf, self.get_cursor_pos_row());
+        // self.get_buf_get(self.get_cursor_pos_row())
+        //     .insert(self.get_cursor_pos_column(), char);
         self.cursor_right();
     }
     /* TODO

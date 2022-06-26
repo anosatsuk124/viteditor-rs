@@ -47,6 +47,9 @@ impl Editor for TuiEditor {
     fn get_buf_get(&self, index: usize) -> Vec<char> {
         self.buf[index].clone()
     }
+    fn set_buf_line(&mut self, line: Vec<char>, index: usize) {
+        self.buf[index] = line;
+    }
     /*
     fn set_words_words_index(&mut self,value:usize) {
         self.words.words_index = value;
