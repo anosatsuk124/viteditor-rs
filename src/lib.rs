@@ -2,16 +2,16 @@ pub mod words_parser;
 
 use std::{
     cmp::{max, min},
-    io::{Error, Write, Read},
+    io::{Error, Read, Write},
 };
 
-#[derive(Eq, PartialEq, Debug, Clone, Copy)]
+#[derive(Default, Eq, PartialEq, Debug, Clone, Copy)]
 pub struct Cursor {
     pub pos: Position,
     pub word_pos: usize,
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Default, Eq, PartialEq, Debug)]
 pub struct Words {
     pub words_index: usize,
     pub char_index: usize,
@@ -46,12 +46,13 @@ pub enum State {
     Exit,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub struct Position{
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
+pub struct Position {
     pub row: usize,
     pub column: usize,
 }
 
+/* FIXME: remove this
 impl Position {
     accessor_impl!((set = set_row) row: usize);
     accessor_impl!((set = set_column) column: usize);
@@ -61,43 +62,38 @@ impl Words {
     accessor_impl!((set = set_wordss_index) words_index: usize);
     accessor_impl!((set = set_char_index) char_index: usize);
 }
+*/
 
 #[macro_export]
 macro_rules! accessor {
     ((get=$getter:ident) : $type:ty ) => {
-        fn $getter(&self) -> $type ;
+        fn $getter(&self) -> $type;
     };
     ((set=$setter:ident) : $type:ty ) => {
-        fn $setter(&mut self, value:$type) ;
+        fn $setter(&mut self, value: $type);
     };
     ((get=$getter:ident, set=$setter:ident) : $type:ty ) => {
-        accessor!((get=$getter): $type);
-        accessor!((set=$setter): $type);
+        accessor!((get = $getter): $type);
+        accessor!((set = $setter): $type);
     };
 }
 
 #[macro_export]
 macro_rules! accessor_impl {
-    ((get=$getter:ident) $name:ident : $type:ty ) => {
+    ((get=$getter:ident) ($($name:ident),*) : $type:ty ) => {
         fn $getter(&self) -> $type {
-            self.$name
+            self.$($name).*
         }
     };
-    ((set=$setter:ident) $name:ident : $type:ty ) => {
+    ((set=$setter:ident) ($($name:ident),*) : $type:ty ) => {
         fn $setter(&mut self, value: $type) {
-            self.$name = value;
+            self.$($name).* = value;
         }
     };
-    ((get=$getter:ident, set=$setter:ident) $name:ident : $type:ty ) => {
+    ((get=$getter:ident, set=$setter:ident) $name:tt : $type:ty ) => {
         accessor_impl!((get=$getter) $name:$type);
         accessor_impl!((set=$setter) $name:$type);
     };
-}
-
-impl Default for Position {
-    fn default() -> Self {
-        Self { row: 0, column: 0 }
-    }
 }
 
 pub trait Editor {
@@ -106,7 +102,6 @@ pub trait Editor {
     fn get_buf_len(&self) -> usize;
     fn get_buf_get(&self, index: usize) -> Vec<char>;
     accessor!((get = get_row_offset, set = set_row_offset): usize);
-    accessor!((get = get_cursor_pos): Position);
     // accessor!((get = get_wordss, set = set_wordss): Words);
     accessor!((get = get_state, set = set_state): State);
     /* TODO:
@@ -115,6 +110,7 @@ pub trait Editor {
     accessor!((get = get_words_words_len): Vec<usize>);
     */
     // FIXME: replace to `get_cursor_pos().column`
+    // accessor!((get = get_cursor_pos): Position);
     accessor!((get = get_cursor_pos_column, set = set_cursor_pos_column): usize);
     accessor!((get = get_cursor_pos_row, set = set_cursor_pos_row): usize);
     fn event_loop<T: Write, R: Read>(&mut self, input: R, out: &mut T);
@@ -126,13 +122,17 @@ pub trait Editor {
         let (rows, _) = Self::terminal_size();
         self.set_row_offset(min(self.get_row_offset(), self.get_cursor_pos_row()));
         if self.get_cursor_pos_row() + 1 >= rows {
-            self.set_row_offset(max(self.get_row_offset(), self.get_cursor_pos_row() + 1 - rows));
+            self.set_row_offset(max(
+                self.get_row_offset(),
+                self.get_cursor_pos_row() + 1 - rows,
+            ));
         }
     }
     fn cursor_right(&mut self) {
-        self.set_cursor_pos_column(
-            min(self.get_cursor_pos_column() + 1, self.get_buf_get(self.get_cursor_pos_row()).len())
-            );
+        self.set_cursor_pos_column(min(
+            self.get_cursor_pos_column() + 1,
+            self.get_buf_get(self.get_cursor_pos_row()).len(),
+        ));
     }
     fn cursor_left(&mut self) {
         if self.get_cursor_pos_column() > 0 {
@@ -142,19 +142,26 @@ pub trait Editor {
     fn cursor_up(&mut self) {
         if self.get_cursor_pos_row() > 0 {
             self.set_cursor_pos_row(self.get_cursor_pos_row() - 1);
-            self.set_cursor_pos_column(min(self.get_buf_get(self.get_cursor_pos_row()).len(), self.get_cursor_pos_column()));
+            self.set_cursor_pos_column(min(
+                self.get_buf_get(self.get_cursor_pos_row()).len(),
+                self.get_cursor_pos_column(),
+            ));
         }
         self.scroll();
     }
     fn cursor_down(&mut self) {
         if self.get_cursor_pos_row() + 1 < self.get_buf_len() {
             self.set_cursor_pos_row(self.get_cursor_pos_row() + 1);
-            self.set_cursor_pos_column(min(self.get_cursor_pos_column(), self.get_buf_get(self.get_cursor_pos_row()).len()));
+            self.set_cursor_pos_column(min(
+                self.get_cursor_pos_column(),
+                self.get_buf_get(self.get_cursor_pos_row()).len(),
+            ));
         }
         self.scroll();
     }
     fn insert(&mut self, char: char) {
-        self.get_buf_get(self.get_cursor_pos_row()).insert(self.get_cursor_pos_column(), char);
+        self.get_buf_get(self.get_cursor_pos_row())
+            .insert(self.get_cursor_pos_column(), char);
         self.cursor_right();
     }
     /* TODO
@@ -167,45 +174,43 @@ pub trait Editor {
     fn event(&mut self, event: KeyEvent) {
         match self.get_state() {
             State::Normal => match event {
-                    KeyEvent::Exit => self.set_state(State::Exit), // Will be implemented in the front-ends.
-                    KeyEvent::Up | KeyEvent::Char('k') => {
-                        self.cursor_up();
-                        self.set_state(State::Normal);
-                    }
-                    KeyEvent::Down | KeyEvent::Char('j') => {
-                        self.cursor_down();
-                        self.set_state(State::Normal);
-                    }
-                    KeyEvent::Left | KeyEvent::Char('h') => {
-                        self.cursor_left();
-                        self.set_state(State::Normal);
-                    }
-                    KeyEvent::Right | KeyEvent::Char('l') => {
-                        self.cursor_right();
-                        self.set_state(State::Normal);
-                    }
-                    KeyEvent::Char('e') => {
-                        // self.skip_word();
-                        self.set_state(State::Normal);
-                    }
-                    KeyEvent::Char('i') => self.set_state(State::Insert),
-                    _ => self.set_state(State::Normal),
+                KeyEvent::Exit => self.set_state(State::Exit), // Will be implemented in the front-ends.
+                KeyEvent::Up | KeyEvent::Char('k') => {
+                    self.cursor_up();
+                    self.set_state(State::Normal);
                 }
+                KeyEvent::Down | KeyEvent::Char('j') => {
+                    self.cursor_down();
+                    self.set_state(State::Normal);
+                }
+                KeyEvent::Left | KeyEvent::Char('h') => {
+                    self.cursor_left();
+                    self.set_state(State::Normal);
+                }
+                KeyEvent::Right | KeyEvent::Char('l') => {
+                    self.cursor_right();
+                    self.set_state(State::Normal);
+                }
+                KeyEvent::Char('e') => {
+                    // self.skip_word();
+                    self.set_state(State::Normal);
+                }
+                KeyEvent::Char('i') => self.set_state(State::Insert),
+                _ => self.set_state(State::Normal),
+            },
             State::Insert => match event {
                 KeyEvent::Char(c) => {
                     self.insert(c);
                     self.set_state(State::Insert);
-                },
+                }
                 KeyEvent::Esc => self.set_state(State::Normal),
                 _ => (),
             },
-            State::Exit => match event {
-                _ => self.set_state(State::Exit),
-            },
+            State::Exit => self.set_state(State::Exit),
         }
     }
     fn draw<T: Write>(&mut self, out: &mut T) {
-        let terminal_size = Position{
+        let terminal_size = Position {
             row: Self::terminal_size().0,
             column: Self::terminal_size().1,
         };
@@ -218,7 +223,7 @@ pub trait Editor {
 
         let mut display_cursor: Option<Position> = None;
 
-        'outer: for row in self.get_row_offset().clone()..self.get_buf_len() {
+        'outer: for row in self.get_row_offset()..self.get_buf_len() {
             // TODO: implement numbers of row
             // Self::write_str(out, format!("{}\t", i).as_str()).unwrap();
 
@@ -231,7 +236,11 @@ pub trait Editor {
                     self.set_words_char_index(self.get_words_char_index() + 1);
                 }
                 */
-                if self.get_cursor_pos() == (Position{ row, column }) {
+                if (Position {
+                    row: self.get_cursor_pos_row(),
+                    column: self.get_cursor_pos_column(),
+                }) == (Position { row, column })
+                {
                     display_cursor = Some(pos);
                 }
                 if let Some(c) = self.get_buf_get(row).get(column) {
@@ -247,7 +256,6 @@ pub trait Editor {
                         }
                     }
                 }
-
             }
             pos.row += 1;
             pos.column = 0;
@@ -259,7 +267,14 @@ pub trait Editor {
         }
 
         if let Some(p) = display_cursor {
-            Self::goto(out, Position{ row: p.row, column: p.column}).unwrap();
+            Self::goto(
+                out,
+                Position {
+                    row: p.row,
+                    column: p.column,
+                },
+            )
+            .unwrap();
         }
 
         out.flush().unwrap();
@@ -270,12 +285,9 @@ impl Default for Viteditor {
     fn default() -> Self {
         Self {
             buf: vec![Vec::new()],
-            cursor: Cursor { 
-                pos: Position::default(), 
-                word_pos: 0,
-            },
+            cursor: Cursor::default(),
             row_offset: 0,
-            words: Words { words_index: 0, char_index: 0, words_len: Vec::new() },
+            words: Words::default(),
             state: State::Normal,
         }
     }

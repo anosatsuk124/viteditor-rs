@@ -1,8 +1,9 @@
 mod args;
 
 use std::{
-    io::{stdin, stdout, Stdin, Write, Read},
-    path, ops::{Deref, DerefMut},
+    io::{stdin, stdout, Read, Stdin, Write},
+    ops::{Deref, DerefMut},
+    path,
 };
 
 use termion::{
@@ -13,10 +14,13 @@ use termion::{
     screen::AlternateScreen,
 };
 
-use viteditor_rs::{words_parser::parser, Editor, State, Words, Cursor, KeyEvent, Position, Viteditor, accessor_impl};
+use viteditor_rs::{
+    accessor_impl, words_parser::parser, Cursor, Editor, KeyEvent, Position, State, Viteditor,
+    Words,
+};
 
 // FIXME: Use macro for this definition
-struct TuiEditor (Viteditor);
+struct TuiEditor(Viteditor);
 
 impl Deref for TuiEditor {
     type Target = Viteditor;
@@ -33,10 +37,16 @@ impl DerefMut for TuiEditor {
 
 impl Editor for TuiEditor {
     // accessor_impl!((get = get_buf) buf: Vec<Vec<char>>);
-    accessor_impl!((get = get_row_offset, set = set_row_offset) row_offset: usize);
+    accessor_impl!((get = get_row_offset, set = set_row_offset)(row_offset): usize);
     // accessor_impl!((get = get_cursor, set = set_cursor) cursor: Cursor);
-    accessor_impl!((get = get_state, set = set_state) state: State);
+    accessor_impl!((get = get_state, set = set_state)(state): State);
     // TODO: fix macro
+    fn get_buf_len(&self) -> usize {
+        self.buf.len()
+    }
+    fn get_buf_get(&self, index: usize) -> Vec<char> {
+        self.buf[index].clone()
+    }
     /*
     fn set_words_words_index(&mut self,value:usize) {
         self.words.words_index = value;
@@ -45,27 +55,10 @@ impl Editor for TuiEditor {
         self.words.char_index = value;
     }
     */
-    fn get_buf_len(&self) -> usize {
-        self.buf.len()
-    }
-    fn get_buf_get(&self, index: usize) -> Vec<char> {
-        self.buf[index].clone()
-    }
-    fn get_cursor_pos_column(&self) -> usize {
-        self.cursor.pos.column
-    }
-    fn set_cursor_pos_column(&mut self,value:usize) {
-        self.cursor.pos.column = value;
-    }
-    fn get_cursor_pos_row(&self) -> usize {
-        self.cursor.pos.row
-    }
-    fn set_cursor_pos_row(&mut self,value:usize) {
-        self.cursor.pos.row = value;
-    }
-    fn get_cursor_pos(&self) -> Position {
-        self.cursor.pos
-    }
+    accessor_impl!(
+        (get = get_cursor_pos_column, set = set_cursor_pos_column)(cursor, pos, column): usize
+    );
+    accessor_impl!((get = get_cursor_pos_row, set = set_cursor_pos_row)(cursor, pos, row): usize);
 
     fn terminal_size() -> (usize, usize) {
         let (cols, rows) = termion::terminal_size().unwrap();
@@ -86,14 +79,18 @@ impl Editor for TuiEditor {
                 Event::Key(Key::Esc) => self.event(KeyEvent::Esc),
                 Event::Key(Key::Ctrl(c)) => self.event(KeyEvent::Ctrl(c)),
                 Event::Key(Key::Char(c)) => self.event(KeyEvent::Char(c)),
-                _ => {},
+                _ => {}
             };
             self.draw(out);
         }
     }
 
     fn goto<T: std::io::Write>(out: &mut T, pos: Position) -> std::io::Result<()> {
-        write!(out, "{}", cursor::Goto(pos.column as u16 + 1, pos.row as u16 + 1))
+        write!(
+            out,
+            "{}",
+            cursor::Goto(pos.column as u16 + 1, pos.row as u16 + 1)
+        )
     }
 
     fn clear_all<T: std::io::Write>(out: &mut T) -> Result<(), std::io::Error> {
@@ -112,7 +109,9 @@ impl TuiEditor {
     fn open(&mut self, path: &path::Path) {
         let str = std::fs::read_to_string(path).ok();
         self.words.words_len = parser(&str.clone().unwrap());
-        self.buf = str.map(|s| s.lines().map(|line| line.chars().collect()).collect()).unwrap();
+        self.buf = str
+            .map(|s| s.lines().map(|line| line.chars().collect()).collect())
+            .unwrap();
     }
 }
 
